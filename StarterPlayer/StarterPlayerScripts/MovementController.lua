@@ -1,23 +1,20 @@
 -- @ScriptType: LocalScript
--- LocalScript in StarterPlayerScripts: MovementController (2D side-scroller movement)
-
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ContextActionService = game:GetService("ContextActionService")
 
 local player = Players.LocalPlayer
 
-local part = game.Workspace:WaitForChild("startppoint")
 -- SETTINGS
-local LOCKED_Z = part.Position.Z -- locking the Z position of the player's HumanoidRootPart
+local LOCKED_Z = 3.43 -- locking the Z position of the player's HumanoidRootPart
 local Z_TOLERANCE = 0.01
 
---mobile buttons
+-- mobile buttons
 local LEFT_IMAGE = "rbxassetid://9637079210"
 local RIGHT_IMAGE = "rbxassetid://9637131321"
 local JUMP_IMAGE = "rbxassetid://9637136409"
 
-local jumpingon = false -- want player jump or not?
+local jumpingon = false -- want the player to jump or not? (change at runtime with setJumpEnabled)
 
 -- STATE
 local leftValue, rightValue = 0, 0
@@ -46,6 +43,20 @@ local function getCharacterParts()
 		return nil
 	end
 	return humanoid, root
+end
+
+
+-- The Humanoid itself decides whether a jump is possible, whatever asked for it
+local function applyJumpState(humanoid)
+	humanoid:SetStateEnabled(Enum.HumanoidStateType.Jumping, jumpingon)
+end
+
+-- Runs for the current character and for every respawn
+local function setupCharacter(character)
+	local humanoid = character:WaitForChild("Humanoid", 10)
+	if humanoid then
+		applyJumpState(humanoid)
+	end
 end
 
 
@@ -109,13 +120,19 @@ local function onUpdate()
 	if not humanoid then
 		return
 	end
+	-- the server sets InCutscene while the story has control of the player
+	if player:GetAttribute("InCutscene") then
+		humanoid:Move(Vector3.zero, false) -- explicitly stop
+		lockZ(root)
+		return
+	end
 	applyMovement(humanoid)
 	applyJump(humanoid)
 	lockZ(root)
 end
 
 
--- Jump binding: creates or removes the key binding AND the mobile button
+-- Jump toggle: the key binding, the mobile button AND the Humanoid's Jumping state
 local function setJumpEnabled(enabled)
 	jumpingon = enabled
 	jumping = false
@@ -125,6 +142,10 @@ local function setJumpEnabled(enabled)
 		ContextActionService:SetPosition("Jump", UDim2.new(0, 120, 0, 100))
 	else
 		ContextActionService:UnbindAction("Jump")
+	end
+	local humanoid = getCharacterParts()
+	if humanoid then
+		applyJumpState(humanoid)
 	end
 end
 
@@ -149,3 +170,7 @@ end
 -- START
 disableDefaultControls()
 bindControls()
+if player.Character then
+	task.spawn(setupCharacter, player.Character)
+end
+player.CharacterAdded:Connect(setupCharacter) -- covers every respawn
